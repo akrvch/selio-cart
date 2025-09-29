@@ -1,0 +1,21 @@
+image:
+  repository: ghcr.io/sellio/sellio-cart
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  httpPort: 8080
+  grpcPort: 50051
+
+resources: {}
+
+env:
+  APP_ENV: prod
+  LOG_LEVEL: info
+
+database:
+  url: ""
+
+

@@ -1,0 +1,39 @@
+[project]
+name = "sellio-cart"
+version = "0.1.0"
+description = "Sellio Cart microservice: FastAPI (RO), gRPC (RW), SQLAlchemy async, Alembic"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [{ name = "Sellio", email = "dev@sellio.local" }]
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "sqlalchemy[asyncio]>=2.0.30",
+  "asyncpg>=0.29.0",
+  "alembic>=1.13.2",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.3.0",
+  "grpcio>=1.64.0",
+  "grpcio-tools>=1.64.0",
+  "protobuf>=5.27.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.2.0",
+  "pytest-asyncio>=0.23.0",
+  "httpx>=0.27.0",
+  "aiosqlite>=0.20.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+asyncio_mode = "auto"
+
+[tool.uv]
+dev-dependencies = [
+  "ruff>=0.6.0",
+]
+
+

@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package sellio.cart.v1;
+
+enum CartStatus {
+  CART_STATUS_UNSPECIFIED = 0;
+  ACTIVE = 1;
+  LOCKED = 2;
+  CHECKED_OUT = 3;
+  CANCELLED = 4;
+}
+
+message CartItem {
+  int64 product_id = 1;
+  string name = 2;
+  string price = 3;  // string decimal, e.g., "10.50"
+  int32 quantity = 4;
+}
+
+message Cart {
+  int64 id = 1;
+  int64 company_id = 2;
+  int64 user_id = 3;     // 0 = NULL
+  string cookie = 4;     // "" = NULL
+  CartStatus status = 5;
+  string created_at = 6; // ISO8601
+  repeated CartItem items = 7;
+  string total_amount = 8;
+}
+
+message UpsertCartRequest {
+  int64 company_id = 1;
+  int64 user_id = 2;   // 0 = anonymous
+  string cookie = 3;   // required for anonymous
+}
+
+message UpsertItemRequest {
+  int64 cart_id = 1;
+  int64 product_id = 2;
+  string name = 3;
+  string price = 4;
+  int32 quantity = 5;
+}
+
+message UpdateQtyRequest {
+  int64 cart_id = 1;
+  int64 product_id = 2;
+  int32 quantity = 3;
+}
+
+message RemoveItemRequest {
+  int64 cart_id = 1;
+  int64 product_id = 2;
+}
+
+message ChangeStatusRequest {
+  int64 cart_id = 1;
+  CartStatus status = 2;
+}
+
+message CartResponse { Cart cart = 1; }
+
+message GetCartRequest { int64 cart_id = 1; }
+
+message GetActiveCartRequest {
+  int64 company_id = 1;
+  int64 user_id = 2;   // 0 = anonymous
+  string cookie = 3;   // for anonymous
+}
+
+message ListByUserRequest {
+  int64 user_id = 1;
+  int64 company_id = 2;  // 0 = any
+  CartStatus status = 3;  // 0 = any
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message ListByIdsRequest { repeated int64 ids = 1; }
+
+message CartList { repeated Cart carts = 1; }
+
+service CartService {
+  rpc UpsertCart(UpsertCartRequest) returns (CartResponse);
+  rpc UpsertItem(UpsertItemRequest) returns (CartResponse);
+  rpc UpdateQty(UpdateQtyRequest) returns (CartResponse);
+  rpc RemoveItem(RemoveItemRequest) returns (CartResponse);
+  rpc ChangeStatus(ChangeStatusRequest) returns (CartResponse);
+
+  rpc GetCart(GetCartRequest) returns (CartResponse);
+  rpc GetActiveCart(GetActiveCartRequest) returns (CartResponse);
+  rpc ListByUser(ListByUserRequest) returns (CartList);
+  rpc ListByIds(ListByIdsRequest) returns (CartList);
+}
+
+

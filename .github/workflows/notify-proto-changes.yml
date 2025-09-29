@@ -1,0 +1,49 @@
+name: notify-proto-changes
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/grpc/protos/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'app/grpc/protos/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  suggest-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Suggest manual publish
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/workflows/publish-protos.yml`;
+            const msg = [
+              'Виявлено зміни у app/grpc/protos/**. За потреби опублікуй нову версію Python-стабів, запустивши вручну workflow “publish-protos” у вкладці Actions (обери bump patch|minor|major або вкажи custom_version).',
+              `Пряме посилання: ${runUrl}`,
+            ].join('\n');
+
+            if (context.eventName === 'pull_request') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: msg,
+              });
+            } else {
+              await github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body: msg,
+              });
+            }
+
+

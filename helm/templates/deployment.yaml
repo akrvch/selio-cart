@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sellio-cart
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: sellio-cart
+  template:
+    metadata:
+      labels:
+        app: sellio-cart
+    spec:
+      containers:
+        - name: sellio-cart
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.httpPort }}
+            - containerPort: {{ .Values.service.grpcPort }}
+          env:
+            - name: HTTP_PORT
+              value: "{{ .Values.service.httpPort }}"
+            - name: GRPC_PORT
+              value: "{{ .Values.service.grpcPort }}"
+            - name: APP_ENV
+              value: "{{ .Values.env.APP_ENV }}"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sellio-cart-secrets
+                  key: DATABASE_URL
+
+

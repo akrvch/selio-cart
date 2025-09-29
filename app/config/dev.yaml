@@ -1,0 +1,5 @@
+database_url: postgresql+asyncpg://user_cart:pass@localhost:5432/cart
+http_port: 8080
+grpc_port: 50051
+
+

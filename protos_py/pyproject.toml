@@ -1,0 +1,13 @@
+[project]
+name = "sellio-cart-protos"
+version = "0.1.0"
+description = "Python gRPC stubs for Sellio Cart Service"
+authors = [{name="Sellio"}]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["grpcio>=1.60.0","protobuf>=4.25.0"]
+
+[project.urls]
+homepage = "https://github.com/OWNER/REPO"
+
+

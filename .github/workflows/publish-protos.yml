@@ -1,0 +1,180 @@
+name: publish-protos
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      custom_version:
+        description: "Custom version (overrides bump)"
+        required: false
+        type: string
+      dry_run:
+        description: "Build only, no publish"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: pipx install uv
+
+      - name: Install build deps
+        run: uv pip install --system grpcio-tools build tomlkit twine
+
+      - name: Prepare protos package scaffold
+        run: |
+          python - << 'PY'
+          from pathlib import Path
+          base = Path('protos_py')
+          pkg = base / 'sellio_cart_protos'
+          pkg.mkdir(parents=True, exist_ok=True)
+          (pkg / '__init__.py').write_text('', encoding='utf-8')
+          pyproject = base / 'pyproject.toml'
+          if not pyproject.exists():
+              pyproject.write_text(
+                  '\n'.join([
+                      '[project]',
+                      'name = "sellio-cart-protos"',
+                      'version = "0.1.0"',
+                      'description = "Python gRPC stubs for Sellio Cart Service"',
+                      'authors = [{name="Sellio"}]',
+                      'readme = "README.md"',
+                      'requires-python = ">=3.12"',
+                      'dependencies = ["grpcio>=1.60.0","protobuf>=4.25.0"]',
+                      '',
+                      '[project.urls]',
+                      'homepage = "https://github.com/OWNER/REPO"',
+                  ]),
+                  encoding='utf-8',
+              )
+          readme = base / 'README.md'
+          if not readme.exists():
+              readme.write_text(
+                  '\n'.join([
+                      '# sellio-cart-protos',
+                      '',
+                      'Python gRPC stubs for Sellio Cart Service.',
+                      '',
+                      'Install:',
+                      '',
+                      '```bash',
+                      'pip install sellio-cart-protos --extra-index-url https://YOUR_GITHUB_PACKAGES_URL',
+                      '```',
+                  ]),
+                  encoding='utf-8',
+              )
+          PY
+
+      - name: Generate Python stubs
+        run: |
+          rm -rf protos_py/sellio_cart_protos/*
+          python - << 'PY'
+          import os, subprocess, pathlib
+          SRC = "app/grpc/protos"
+          OUT = "protos_py"
+          pathlib.Path(f"{OUT}/sellio_cart_protos").mkdir(parents=True, exist_ok=True)
+          (pathlib.Path(f"{OUT}/sellio_cart_protos/__init__.py")).write_text("")
+          protos = []
+          for root, _, files in os.walk(SRC):
+              for f in files:
+                  if f.endswith(".proto"):
+                      protos.append(os.path.join(root, f))
+          if not protos:
+              raise SystemExit("No proto files found")
+          # Build proper command avoiding shell quoting issues
+          subprocess.check_call([
+              "python","-m","grpc_tools.protoc",
+              "-I", SRC,
+              "--python_out", OUT,
+              "--grpc_python_out", OUT,
+              *protos
+          ])
+          PY
+
+      - name: Bump version
+        id: bump
+        env:
+          INPUT_BUMP: ${{ inputs.bump }}
+          INPUT_CUSTOM_VERSION: ${{ inputs.custom_version }}
+        run: |
+          python - << 'PY'
+          from tomlkit import parse, dumps
+          from pathlib import Path
+          import os
+          p = Path("protos_py/pyproject.toml")
+          t = parse(p.read_text())
+          v = t["project"]["version"]
+          inp = os.getenv("INPUT_BUMP","patch")
+          custom = os.getenv("INPUT_CUSTOM_VERSION"," ").strip()
+          def bump(v, kind):
+              maj, minr, pat = map(int, v.split("."))
+              if kind=="major": return f"{maj+1}.0.0"
+              if kind=="minor": return f"{maj}.{minr+1}.0"
+              return f"{maj}.{minr}.{pat+1}"
+          newv = custom if custom else bump(v, inp)
+          t["project"]["version"] = newv
+          p.write_text(dumps(t))
+          print(f"version={newv}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+              fh.write(f"version={newv}\n")
+          PY
+
+      - name: Commit generated stubs and version
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add protos_py
+          git commit -m "proto: publish version ${{ steps.bump.outputs.version }}" || echo "No changes to commit"
+          git push
+
+      - name: Build wheel
+        run: |
+          cd protos_py
+          uv build
+
+      - name: Publish to GitHub Packages
+        if: ${{ inputs.dry_run == false }}
+        env:
+          TWINE_USERNAME: ${{ github.actor }}
+          TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          REPO: "https://upload.pypi.org/legacy/" # Replace with GitHub Packages endpoint for Python
+        run: |
+          uv pip install --system twine
+          python - << 'PY'
+          import glob, subprocess, os
+          wheel = glob.glob("protos_py/dist/*.whl")[0]
+          repo = os.environ.get("REPO")
+          subprocess.check_call(["twine","upload","--repository-url", repo, wheel])
+          PY
+
+      - name: Create git tag
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          ver=${{ steps.bump.outputs.version }}
+          git tag -a "proto-v$ver" -m "Protos $ver"
+          git push origin "proto-v$ver"
+
+      - name: Output package info
+        run: echo "Published package sellio-cart-protos:${{ steps.bump.outputs.version }}"
+
+
