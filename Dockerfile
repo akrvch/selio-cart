@@ -20,6 +20,14 @@ RUN useradd -u 10001 -m appuser
 COPY . .
 # Create a virtualenv using uv and install deps
 RUN uv venv /opt/venv && . /opt/venv/bin/activate && uv pip install .[test]
+# Generate gRPC stubs
+RUN . /opt/venv/bin/activate && \
+    mkdir -p app/grpc/generated && \
+    python -m grpc_tools.protoc -I app/grpc/protos \
+    --python_out=app/grpc/generated \
+    --grpc_python_out=app/grpc/generated \
+    app/grpc/protos/cart.proto && \
+    sed -i 's/import cart_pb2/from . import cart_pb2/g' app/grpc/generated/cart_pb2_grpc.py
 
 FROM python:3.14-slim AS runtime
 ENV PATH="/opt/venv/bin:$PATH" \
@@ -29,6 +37,7 @@ RUN useradd -u 10001 -m appuser
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
+COPY --from=builder /app/app/grpc/generated /app/app/grpc/generated
 
 USER appuser
 EXPOSE 8080 50051

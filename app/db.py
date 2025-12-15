@@ -31,7 +31,8 @@ async def session_ctx() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-async def session_dep() -> AsyncIterator[AsyncSession]:
+async def get_session() -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency for database session"""
     async with session_ctx() as session:
         yield session
 

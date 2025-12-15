@@ -38,7 +38,7 @@ def serialize_cart_message(cart_dict: dict) -> cart_pb2.Cart:
 
 
 class CartServiceImpl(cart_pb2_grpc.CartServiceServicer):
-    # RW
+
     async def UpsertCart(self, request: cart_pb2.UpsertCartRequest, context: grpc.aio.ServicerContext) -> cart_pb2.CartResponse:  # type: ignore
         async with session_ctx() as session:
             svc = CartService(session)
@@ -73,7 +73,7 @@ class CartServiceImpl(cart_pb2_grpc.CartServiceServicer):
             async with session.begin():
                 cart = await svc.update_qty(request.cart_id, request.product_id, request.quantity)
                 if not cart:
-                    await context.abort(grpc.StatusCode.NOT_FOUND, "cart or item not found")
+                    await context.abort(grpc.StatusCode.NOT_FOUND, "cart was deleted (became empty) or item not found")
                 await session.refresh(cart)
             serialized = await svc.serialize(cart)  # type: ignore[arg-type]
             return cart_pb2.CartResponse(cart=serialize_cart_message(serialized))
@@ -84,7 +84,7 @@ class CartServiceImpl(cart_pb2_grpc.CartServiceServicer):
             async with session.begin():
                 cart = await svc.remove_item(request.cart_id, request.product_id)
                 if not cart:
-                    await context.abort(grpc.StatusCode.NOT_FOUND, "cart not found")
+                    await context.abort(grpc.StatusCode.NOT_FOUND, "cart was deleted (became empty) or item not found")
                 await session.refresh(cart)
             serialized = await svc.serialize(cart)  # type: ignore[arg-type]
             return cart_pb2.CartResponse(cart=serialize_cart_message(serialized))

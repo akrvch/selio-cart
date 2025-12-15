@@ -49,6 +49,14 @@ class CartRepository:
         return res.scalar_one_or_none()
 
     async def upsert_cart(self, company_id: int, user_id: int | None, cookie: str | None) -> Cart:
+        """
+        Get or create ACTIVE cart for user/cookie + company.
+        
+        Business rule: One user can have only ONE active cart per company.
+        This is enforced by partial unique constraints in DB:
+        - UNIQUE (company_id, user_id) WHERE status = 1 AND user_id IS NOT NULL
+        - UNIQUE (company_id, cookie) WHERE status = 1 AND cookie IS NOT NULL
+        """
         existing = await self.get_active(company_id=company_id, user_id=user_id, cookie=cookie)
         if existing:
             return existing
@@ -72,6 +80,12 @@ class CartRepository:
         cart.status = new_status
         await self.session.flush()
         return cart
+
+    async def delete_cart(self, cart_id: int) -> bool:
+        """Delete cart by ID"""
+        stmt = delete(Cart).where(Cart.id == cart_id)
+        res = await self.session.execute(stmt)
+        return res.rowcount and res.rowcount > 0
 
 
 class CartItemRepository:
@@ -114,9 +128,28 @@ class CartItemRepository:
         await self.session.flush()
         return item
 
-    async def remove_item(self, cart_id: int, product_id: int) -> bool:
+    async def remove_item(self, cart_id: int, product_id: int) -> tuple[bool, bool]:
+        """
+        Remove item from cart.
+        Returns: (item_removed: bool, cart_deleted: bool)
+        """
         stmt = delete(CartItem).where(and_(CartItem.cart_id == cart_id, CartItem.product_id == product_id))
         res = await self.session.execute(stmt)
-        return res.rowcount and res.rowcount > 0
+        item_removed = res.rowcount and res.rowcount > 0
+        
+        if item_removed:
+            # Check if cart has any items left
+            count_stmt = select(func.count(CartItem.id)).where(CartItem.cart_id == cart_id)
+            count_res = await self.session.execute(count_stmt)
+            remaining_items = count_res.scalar() or 0
+            
+            if remaining_items == 0:
+                # Delete empty cart directly
+                cart_delete_stmt = delete(Cart).where(Cart.id == cart_id)
+                cart_res = await self.session.execute(cart_delete_stmt)
+                cart_deleted = cart_res.rowcount and cart_res.rowcount > 0
+                return item_removed, cart_deleted
+        
+        return item_removed, False
 
 

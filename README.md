@@ -58,25 +58,47 @@ export DATABASE_URL="postgresql+asyncpg://user_cart:pass@localhost:5432/cart"
 uv run alembic upgrade head
 make dev
 
-## Docker Compose (local, external DB)
+## Docker Compose (local with Postgres)
 
 ```bash
-export DATABASE_URL="postgresql+asyncpg://user_cart:pass@your-remote-host:5432/cart"
 docker compose up --build
 ```
 
-This starts only the app (no local Postgres). The app runs Alembic migrations on start and exposes:
-- REST: `http://localhost:8080`
-- gRPC: `localhost:50051`
+This starts both services:
+- `cart-db` - PostgreSQL on `localhost:5433` (user: `user_cart`, password: `pass`, database: `cart`)
+- `sellio-cart` - app with REST on `http://localhost:8081` and gRPC on `localhost:50052`
+
+The app runs Alembic migrations on start automatically.
+
+**Note:** Ports are mapped to avoid conflicts:
+- PostgreSQL: `5433` (instead of 5432)
+- REST API: `8081` (instead of 8080)
+- gRPC: `50052` (instead of 50051)
 
 ```
 
-## REST (read-only)
+## REST API
+
+Full documentation: [REST_API.md](REST_API.md)
+
+Interactive Swagger UI: `http://localhost:8081/docs` (Docker) or `http://localhost:8080/docs` (direct)
+
+**Important Business Rule:** One user can have only ONE active cart per company. When adding items, they're always added to the existing active cart or a new one is created automatically.
+
+### Read endpoints
 - `GET /api/v1/cart/{cart_id}`
 - `GET /api/v1/carts/by-user?user_id=&company_id=&status=&limit=&offset=`
 - `POST /api/v1/carts/by-ids` body: `{ "ids": [1,2,3] }`
 - `GET /api/v1/cart/active?company_id=` (cookie managed automatically)
 - `GET /healthz`
+
+### Write endpoints (duplicate of gRPC)
+- `POST /api/v1/cart/add-item` - **add item (auto-creates cart if needed)** ⭐
+- `POST /api/v1/cart/upsert` - create or get active cart
+- `POST /api/v1/cart/{cart_id}/item` - add/update item to existing cart
+- `PUT /api/v1/cart/{cart_id}/item/{product_id}/quantity` - update quantity
+- `DELETE /api/v1/cart/{cart_id}/item/{product_id}` - remove item
+- `PUT /api/v1/cart/{cart_id}/status` - change cart status
 
 ## gRPC (write channel)
 - See `app/grpc/protos/cart.proto` and `app/grpc/generated/`.
